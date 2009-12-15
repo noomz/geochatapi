@@ -9,12 +9,16 @@ TODO: Exception capturing.
 import logging
 import urllib
 import urllib2
-
-from xml.etree.ElementTree import fromstring
+import xml.etree.ElementTree as ET
 
 BASE_API_URL = "http://geochat.instedd.org/api/"
 # GeoChat requires this realm.
 REALM = "Custom Basic Authentication"
+
+# XML Namespaces
+NS_GEO = "http://www.w3.org/2003/01/geo/wgs84_pos#"
+NS_GEOCHAT = "http://geochat.instedd.org/api/1.0"
+NS_ATOM = "http://www.w3.org/2005/Atom"
 
 class Geochat(object):
     '''Geochat API Implementation for appengine only.'''
@@ -67,13 +71,13 @@ class Geochat(object):
         '''
 
         data = {'message':message}
-        response = self.post('/api/groups/%s/messages.rss' % group, data)
-        if response.status_code == 200:
+        response = self.post('groups/%s/messages.rss' % group, data)
+        if response.code == 200:
             return True
         else:
             return False
 
-    def get_user_groups(self, login):
+    def get_user_groups(self, login=None):
         '''
         http://geochathelp.com/doku.php?id=api:apilistusergroups
 
@@ -86,6 +90,78 @@ class Geochat(object):
         date. Most recent ones first.
         '''
 
-        response = self.get('/api/users/%s/groups.rss' % login)
-        rss = fromstring(response.content) if response.status_code == 200 else None
+        if not login:
+            login = self.user
+
+        response = self.get('users/%s/groups.rss' % login)
+        if response.code == 200:
+            rss = ET.fromstring(response.read())
+        else:
+            rss = None
+
         return rss
+
+    def etree_find_ns(self, elem, ns, tag):
+        '''
+        Helper function.
+        '''
+
+        return elem.find('{%s}%s' % (ns, tag))
+
+    def parse_messages(self, items):
+        '''
+        Get geochat messages ET element and return list of messages.
+        '''
+
+        def _parse_message(item):
+            '''
+            Helper function to parse each message.
+            '''
+
+            message = {}
+            message['title'] = item.find('title').text
+            message['author'] = item.find('author').text
+            message['pubDate'] = item.find('pubDate').text
+            message['guid'] = item.find('guid').text
+            message['ThreadId'] = self.etree_find_ns(item, NS_GEOCHAT, 'ThreadId').text
+            message['ResponseOf'] = self.etree_find_ns(item, NS_GEOCHAT, 'ResponseOf').text
+            message['SenderAlias'] = self.etree_find_ns(item, NS_GEOCHAT, 'SenderAlias').text
+            message['GroupAlias'] = self.etree_find_ns(item, NS_GEOCHAT, 'GroupAlias').text
+            message['Route'] = self.etree_find_ns(item, NS_GEOCHAT, 'Route').text
+            message['IsGroupBlast'] = self.etree_find_ns(item, NS_GEOCHAT, 'IsGroupBlast').text
+            message['lat'] = self.etree_find_ns(item, NS_GEO, 'lat').text
+            message['long'] = self.etree_find_ns(item, NS_GEO, 'long').text
+            message['updated'] = self.etree_find_ns(item, NS_ATOM, 'updated').text
+
+            return message
+
+        messages = []
+        for item in items:
+            messages.append(_parse_message(item))
+
+        return messages
+
+
+    def get_group_messages(self, group, since=None, until=None, page=0):
+        '''
+        http://geochathelp.com/doku.php?id=api:apigetmessageinthegroup
+
+        Returns the list of all Messages in the specified Group.
+        '''
+
+        data = {}
+        if since:
+            data['since'] = since
+        if until:
+            data['until'] = until
+        if page:
+            data['page'] = page
+
+        response = self.get('groups/%s/messages.rss' % group, data)
+        if response.code == 200:
+            tree = ET.parse(response)
+            elem = tree.getroot()
+            msg = self.parse_messages(elem.findall('channel/item'))
+            return msg
+        else:
+            return None
