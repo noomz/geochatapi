@@ -89,19 +89,3 @@ class Geochat(object):
         response = self.get('/api/users/%s/groups.rss' % login)
         rss = fromstring(response.content) if response.status_code == 200 else None
         return rss
-
-    def get_user_groups_alias(self, login):
-        '''Helper function to get groups alias'''
-
-        # NOTE: This function doesn't work now. (element.get problem)
-
-        rss = self.get_user_groups(login)
-        if rss is None:
-            return False
-
-        groups = []
-        for element in rss.findall('channel/item'):
-            alias = element.get('link').split('/')[-1]
-            groups.append(alias)
-
-        return groups
