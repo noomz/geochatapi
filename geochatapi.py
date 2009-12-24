@@ -52,7 +52,10 @@ class Geochat(object):
 
         data = urllib.urlencode(data)
         request = BASE_API_URL + resource + '?' + data
-        return self._opener.open(request)
+        try:
+            return self._opener.open(request)
+        except:
+            return False
 
     def post(self, resource, data={}):
         '''
@@ -60,14 +63,17 @@ class Geochat(object):
         '''
 
         data = urllib.urlencode(data)
-        return self._opener.open(BASE_API_URL, data)
+        try:
+            return self._opener.open(BASE_API_URL + resource, data)
+        except:
+            return False
 
     def send_group(self, group, message):
         '''
-        http://geochathelp.com/doku.php?id=api:apisendmessagetogroup
-
         Sends a Message on behalf of the authenticated User to a specific
         Group. The User must be a member of the Group.
+
+        http://geochathelp.com/doku.php?id=api:apisendmessagetogroup
         '''
 
         data = {'message':message}
@@ -79,8 +85,6 @@ class Geochat(object):
 
     def get_user_groups(self, login=None):
         '''
-        http://geochathelp.com/doku.php?id=api:apilistusergroups
-
         Returns the list of groups that a User belongs to.
 
         If the queried user is not the authenticated user, only the public 
@@ -88,6 +92,8 @@ class Geochat(object):
         the logged in user, also the groups pending to join (Invited or
         PendingApproval) are listed. Items are ordered by last activity
         date. Most recent ones first.
+
+        http://geochathelp.com/doku.php?id=api:apilistusergroups
         '''
 
         if not login:
@@ -144,9 +150,9 @@ class Geochat(object):
 
     def get_group_messages(self, group, since=None, until=None, page=0):
         '''
-        http://geochathelp.com/doku.php?id=api:apigetmessageinthegroup
-
         Returns the list of all Messages in the specified Group.
+
+        http://geochathelp.com/doku.php?id=api:apigetmessageinthegroup
         '''
 
         data = {}
@@ -165,3 +171,19 @@ class Geochat(object):
             return msg
         else:
             return None
+
+    def send_message(self, message, to=None):
+        '''
+        Sends a Message on behalf of the authenticated User.
+        http://geochathelp.com/doku.php?id=api:apisendmessage
+        '''
+
+        data = {'message':message}
+        if to:
+            data['to'] = to
+
+        response = self.post('messages.rss', data)
+        if response:
+            return response.code == 200
+        else:
+            return False
